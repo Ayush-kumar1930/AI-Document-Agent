@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Document Agent | RAG</title>
+    <!-- Marked.js for markdown and table rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Left Panel: Upload & Stats */
+        .sidebar {
+            width: 340px;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .sidebar h2 {
+            font-size: 1.25rem;
+            color: var(--accent);
+        }
+
+        .upload-box {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .upload-box:hover {
+            border-color: var(--accent);
+            background: rgba(56, 189, 248, 0.05);
+        }
+
+        .upload-box input {
+            display: none;
+        }
+
+        .status-card {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 0.85rem;
+            border: 1px solid var(--border);
+        }
+
+        .status-card div {
+            margin-bottom: 6px;
+        }
+
+        /* Suggestion Chips */
+        .suggestions-container {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .suggestion-chip {
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .suggestion-chip:hover {
+            background: var(--accent);
+            color: #000;
+            transform: translateY(-1px);
+        }
+
+        /* Right Panel: Chat */
+        .main-chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .chat-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 14px 18px;
+            border-radius: 12px;
+            line-height: 1.5;
+            font-size: 0.95rem;
+        }
+
+        .user-msg {
+            align-self: flex-end;
+            background: var(--accent);
+            color: #000;
+            font-weight: 500;
+            border-bottom-right-radius: 2px;
+        }
+
+        .bot-msg {
+            align-self: flex-start;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 2px;
+        }
+
+        .sources-toggle {
+            margin-top: 10px;
+            font-size: 0.75rem;
+            color: var(--accent);
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .sources-content {
+            display: none;
+            margin-top: 8px;
+            font-size: 0.8rem;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 6px;
+            border-left: 3px solid var(--accent);
+            white-space: pre-wrap;
+        }
+
+        /* Markdown Tables & Lists Styling */
+        .message table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 12px 0;
+            font-size: 0.85rem;
+        }
+
+        .message th,
+        .message td {
+            border: 1px solid var(--border);
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .message th {
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent);
+        }
+
+        .message tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .message ul,
+        .message ol {
+            padding-left: 20px;
+            margin: 8px 0;
+        }
+
+        .message p {
+            margin-bottom: 8px;
+        }
+
+        /* Input Bar */
+        .input-bar {
+            padding: 20px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            background: var(--bg);
+        }
+
+        .input-bar input {
+            flex: 1;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            color: var(--text);
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        .input-bar input:focus {
+            border-color: var(--accent);
+        }
+
+        .btn {
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h2>📄 AI Document Agent</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Upload a PDF to chunk, embed, and query with strict
+            document grounding.</p>
+
+        <div class="upload-box" onclick="document.getElementById('pdf-input').click()">
+            <input type="file" id="pdf-input" accept="application/pdf" onchange="uploadPDF()">
+            <div style="font-size: 2rem;">📤</div>
+            <p id="upload-label" style="margin-top: 8px; font-size: 0.9rem;">Click or drag PDF here</p>
+        </div>
+
+        <div id="status-card" class="status-card" style="display: none;">
+            <div style="color: var(--accent); font-weight: 600;" id="stat-filename">No file</div>
+            <div><strong>Chunks:</strong> <span id="stat-chunks">0</span></div>
+            <div><strong>Characters:</strong> <span id="stat-chars">0</span></div>
+            <div style="color: #4ade80;">Ready for questions!</div>
+        </div>
+    </div>
+
+    <!-- Main Chat -->
+    <div class="main-chat">
+        <div class="chat-header">
+            <h3>Strict Q&A Assistant</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Model: Llama-3.3-70B via OpenRouter</span>
+        </div>
+
+        <div class="messages-container" id="chat-box">
+            <div class="message bot-msg">
+                👋 Hello! Upload a PDF on the left. Once processed, ask me anything and I will answer
+                <strong>strictly</strong> from your document.
+            </div>
+        </div>
+
+        <form class="input-bar" onsubmit="event.preventDefault(); askQuestion();">
+            <input type="text" id="question-input" placeholder="Ask a question about the uploaded PDF..."
+                autocomplete="off">
+            <button class="btn" id="send-btn" type="submit">Ask</button>
+        </form>
+    </div>
+
+    <script>
+        async function uploadPDF() {
+            const fileInput = document.getElementById('pdf-input');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            document.getElementById('upload-label').innerText = "Processing PDF...";
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+                const response = await fetch("/upload", { method: "POST", body: formData });
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('upload-label').innerText = "Uploaded: " + data.filename;
+                    document.getElementById('stat-filename').innerText = data.filename;
+                    document.getElementById('stat-chunks').innerText = data.total_chunks;
+                    document.getElementById('stat-chars').innerText = data.total_characters;
+                    document.getElementById('status-card').style.display = "block";
+
+                    appendBotMessage(`✅ Successfully processed <strong>${data.filename}</strong>! Created <strong>${data.total_chunks}</strong> chunks in ChromaDB. You can now ask questions.`);
+                } else {
+                    alert("Upload failed: " + (data.detail || "Unknown error"));
+                    document.getElementById('upload-label').innerText = "Click to upload PDF";
+                }
+            } catch (err) {
+                alert("Error uploading file: " + err);
+                document.getElementById('upload-label').innerText = "Click to upload PDF";
+            }
+        }
+
+        async function askQuestion() {
+            const input = document.getElementById('question-input');
+            const question = input.value.trim();
+            if (!question) return;
+
+            appendUserMessage(question);
+            input.value = "";
+            input.focus();
+
+            const sendBtn = document.getElementById('send-btn');
+            sendBtn.disabled = true;
+
+            // Temporary loading message
+            const loadingId = appendBotMessage("Thinking and searching document chunks...");
+
+            try {
+                const response = await fetch("/ask", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ question })
+                });
+                const data = await response.json();
+
+                // Remove loading message
+                const loadingEl = document.getElementById(loadingId);
+                if (loadingEl) loadingEl.remove();
+
+                if (response.ok) {
+                    appendBotMessage(data.answer, data.sources, data.suggestions);
+                } else {
+                    appendBotMessage("⚠️ Error: " + (data.detail || "Failed to get answer."));
+                }
+            } catch (err) {
+                const loadingEl = document.getElementById(loadingId);
+                if (loadingEl) loadingEl.remove();
+                appendBotMessage("⚠️ Network error: " + err);
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        function appendUserMessage(text) {
+            const box = document.getElementById('chat-box');
+            const msg = document.createElement('div');
+            msg.className = "message user-msg";
+            msg.innerText = text;
+            box.appendChild(msg);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        // Single, clean appendBotMessage with Marked.js, Page Badges, and Suggestion Chips!
+        function appendBotMessage(text, sources = [], suggestions = []) {
+            const box = document.getElementById('chat-box');
+            const msg = document.createElement('div');
+            msg.className = "message bot-msg";
+            const id = "msg-" + Date.now();
+            msg.id = id;
+
+            // Use marked.parse for markdown, code, and table rendering
+            let parsedText = typeof marked !== 'undefined' ? marked.parse(text) : text.replace(/\n/g, '<br>');
+            let html = `<div>${parsedText}</div>`;
+
+            // 1. Breadcrumb Page Badges & Sources Drawer
+            if (sources && sources.length > 0) {
+                const pages = [...new Set(sources.map(s => s.page))].sort((a, b) => a - b);
+                const pageBadges = pages.map(p => `<span style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; padding: 2px 8px; border-radius: 4px; margin-right: 6px; font-size: 0.75rem; font-weight: 600;">📍 Page ${p}</span>`).join("");
+
+                html += `<div style="margin-top: 10px;">${pageBadges}</div>`;
+                html += `<div class="sources-toggle" onclick="toggleSources('${id}')">🔍 View Sources (${sources.length})</div>`;
+                html += `<div class="sources-content" id="sources-${id}">` +
+                    sources.map((s, i) => `<strong>Source ${i + 1} (Page ${s.page}):</strong>\n${s.text}`).join("\n\n---\n\n") +
+                    `</div>`;
+            }
+
+            // 2. Clickable Suggestion Chips
+            if (suggestions && suggestions.length > 0) {
+                html += `<div class="suggestions-container">`;
+                suggestions.forEach(s => {
+                    const escaped = s.replace(/'/g, "\\'");
+                    html += `<button class="suggestion-chip" onclick="askSuggested('${escaped}')">💡 ${s}</button>`;
+                });
+                html += `</div>`;
+            }
+
+            msg.innerHTML = html;
+            box.appendChild(msg);
+            box.scrollTop = box.scrollHeight;
+            return id;
+        }
+
+        // Trigger question when clicking a suggestion chip
+        function askSuggested(questionText) {
+            const input = document.getElementById('question-input');
+            input.value = questionText;
+            askQuestion();
+        }
+
+        function toggleSources(msgId) {
+            const el = document.getElementById("sources-" + msgId);
+            if (el) el.style.display = (el.style.display === "block") ? "none" : "block";
+        }
+    </script>
+</body>
+
+</html>
